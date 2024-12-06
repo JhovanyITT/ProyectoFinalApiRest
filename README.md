@@ -18,7 +18,7 @@ FlareDev-API es un proyecto de parte de la materia de **Desarrollo de Servicios 
 >   **npm install express dotenv @google-cloud/storage facturapi firebase mongoose node-mailjet pdfkit twilio**
 
 ## Integrantes del equipo de **FlareDev**
-    - [AMARAL DELGADILLO ALDO AZAEL.](https://github.com/AzaelAD)
-    - [JAIME FERNANDEZ JHOVANY GABRIEL.](https://github.com/JhovanyITT)
-    - [MERCADO SAUCEDA CRISTIAN.](https://github.com/CrissCross20)
-    - [SANCHEZ TOVAR JESUS ALFREDO.](https://github.com/baNanoIT)
+- [AMARAL DELGADILLO ALDO AZAEL.](https://github.com/AzaelAD)
+- [JAIME FERNANDEZ JHOVANY GABRIEL.](https://github.com/JhovanyITT)
+- [MERCADO SAUCEDA CRISTIAN.](https://github.com/CrissCross20)
+- [SANCHEZ TOVAR JESUS ALFREDO.](https://github.com/baNanoIT)
