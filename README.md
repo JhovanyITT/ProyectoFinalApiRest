@@ -9,7 +9,7 @@ FlareDev-API es un proyecto de parte de la materia de **Desarrollo de Servicios 
 > El siguiente proyecto cuenta con el consumo de API's externas como **facturapi**, **firebase**, **node-mailjet**,**google-cloud/storage** para el cumplimiento de los requisitos del proyecto.
 
 > [!TIP]
-> Si requieres obtener más información de los endpoints del proyecto consulta la  [documentación oficial](https://app.swaggerhub.com/apis-docs/JHOVANYGABRIELJAIMEFERNANDEZ/FlareDev-API/1.0.0)
+> Si requieres obtener más información de los endpoints del proyecto consulta la  [documentación oficial](https://app.swaggerhub.com/apis-docs/JHOVANYGABRIELJAIMEFERNANDEZ/FlareDev-API/1.0.0).
 
 > [!IMPORTANT]
 > Para poder usar el proyecto será necesario tener las siguientes dependencias:
