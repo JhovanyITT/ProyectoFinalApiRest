@@ -1,6 +1,2 @@
-# Ignorando carpeta de módulos
 node_modules
-# Ignorando las variables de entorno
 .env
-# Ignorando los archivos *.json
-*.json

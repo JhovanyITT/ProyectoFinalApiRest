@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@google-cloud/storage": "^7.14.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "facturapi": "^4.4.2",
+    "firebase": "^11.0.2",
+    "mongoose": "^8.8.3",
+    "node-mailjet": "^6.0.6",
+    "pdfkit": "^0.15.1",
+    "stripe": "^17.4.0",
+    "twilio": "^5.3.7"
+  }
+}

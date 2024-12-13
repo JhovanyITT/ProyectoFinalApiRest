@@ -12,6 +12,7 @@ const cartSchema = new mongoose.Schema({
     iva: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
     estatus: { type: String, enum: ['activo', 'cerrado'], default: 'activo' },
+    stripeId: {type: String},
     fecha_creacion: { type: Date, default: Date.now },
     fecha_cierre: { type: Date }
   });

@@ -4,9 +4,9 @@ const User = require('../models/userModel');
 const { sendEmail } = require('../apis/mailjet');
 const facturapi = require('../apis/facturapi');
 const Twilio = require('../apis/twilio');
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
 const { uploadFile } = require('../apis/firebase');
+const Stripe = require('../apis/stripe');
+const fs = require('fs');
 
 const cartController = {
     getAllCarts: async (req, res) => {
@@ -70,6 +70,7 @@ const cartController = {
         try {
             const { id_carrito, productoId, cantidad } = req.body;
             const cart = await Cart.findById(id_carrito);
+
             if (!cart) return res.status(404).json({ error: 'Carrito no encontrado' });
             
             // Verifica si el carrito ya esta cerrado
@@ -86,7 +87,9 @@ const cartController = {
     
             await updateCartTotals(cart);
             await cart.save();
-            res.json(await Cart.findById(id_carrito).populate('productos.producto'));
+            res.json(await Cart.findById(id_carrito)
+            .populate('usuario')
+            .populate('productos.producto'));
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -97,7 +100,8 @@ const cartController = {
         try {
             const { id_carrito, productoId } = req.body;
             const cart = await Cart.findById(id_carrito);
-                if (!cart) return res.status(404).json({ error: 'Carrito no encontrado' });
+            
+            if (!cart) return res.status(404).json({ error: 'Carrito no encontrado' });
 
             // Verifica si el carrito ya esta cerrado
             if (cart.estatus === 'cerrado'){
@@ -118,7 +122,9 @@ const cartController = {
             await cart.save();
     
             // Retorna el carrito actualizado con los productos poblados
-            res.json(await Cart.findById(id_carrito).populate('productos.producto'));
+            res.json(await Cart.findById(id_carrito)
+            .populate('usuario')
+            .populate('productos.producto'));
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -127,9 +133,14 @@ const cartController = {
 
     closeCart: async (req, res) => {
         try {
-            const { id_carrito } = req.body;
+            const { id_carrito, currency, payment_method } = req.body;
             const cart = await Cart.findById(id_carrito).populate('usuario').populate('productos.producto');
+            
             if (!cart) return res.status(404).json({ error: 'Carrito no encontrado' });
+
+            if (cart.estatus === 'cerrado'){
+                return res.status(404).json({ error: 'El carrito ya ha sido cerrado' });
+            }
             
             // Validar que exista stocke suficiente del producto
             for (const item of cart.productos) {
@@ -146,10 +157,6 @@ const cartController = {
                 await product.save();
             }
 
-            // Colocar el estatus del carrito como cerrado
-            cart.estatus = 'cerrado';
-            cart.fecha_cierre = new Date();
-            await cart.save();
 
             const user = await User.findById(cart.usuario._id);
             if (!user) {
@@ -187,17 +194,23 @@ const cartController = {
                 payment_form: '28'
             };
 
+            // Crear el pago en stripe
+            let amount = cart.total * 100;
+            const pago = await Stripe.createPayment(amount, currency, payment_method);
+
+            cart.stripeId = pago.id;
+
             // Envia la factura a facturapi
-            await facturapi.createInvoice(invoiceData);
+            const factura = await facturapi.createInvoice(invoiceData);
 
             // Generar PDF de la factura de manera local
-            await generateInvoicePDF(cart, user);
+            const zipFilePath = await facturapi.downloadInvoice(factura.id);
 
             // Subir PDF de la factura a firebase storage
-            const facturaurl = await uploadFile(`./facturas/${cart._id}.pdf`);
+            const facturaurl = await uploadFile(zipFilePath);
             
             // Eliminar el PDF de manera local
-            await deleteInvoicePDF (`./facturas/${cart._id}.pdf`);
+            await deleteInvoicePDF(zipFilePath);
 
             // Enviar un SMS
             const mensaje = `
@@ -280,7 +293,6 @@ const cartController = {
                         <tr>
                         <th>Producto</th>
                         <th>Cantidad</th>
-                        <th>Precio</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -290,21 +302,18 @@ const cartController = {
                             `<tr>
                                 <td>${item.producto.name}</td>
                                 <td>${item.cantidad}</td>
-                                <td>$${item.producto.price.toFixed(2)}</td>
                             </tr>`
                         )
                         .join('')}
                     </tbody>
                     </table>
-                    <p><strong>Subtotal:</strong> $${cart.subtotal.toFixed(2)}</p>
-                    <p><strong>IVA:</strong> $${cart.iva.toFixed(2)}</p>
-                    <p><strong>Total:</strong> $${cart.total.toFixed(2)}</p>
-                    <p>Aqí puedes descargar tu factura:</p>
+                    <p><strong>Total:</strong> $${factura.total.toFixed(2)}</p>
+                    <p>Más detalles de la factura:</p>
                     <a href="${facturaurl}">Descargar factura</a>
                 </div>
                 <div class="footer">
                     <p>Gracias por tu preferencia.</p>
-                    <p>&copy; 2024 Tu Empresa</p>
+                    <p>&copy; 2024 Flare Dev S.A de C.V</p>
                 </div>
                 </div>
             </body>
@@ -314,7 +323,10 @@ const cartController = {
             // Intentar enviar el correo de confirmación
             await sendEmail(user.email, 'Confirmación de Compra', emailContent);
             
-            
+            // Colocar el estatus del carrito como cerrado
+            cart.estatus = 'cerrado';
+            cart.fecha_cierre = new Date();
+            await cart.save();
 
             res.json(cart);
         } catch (error) {
@@ -325,79 +337,19 @@ const cartController = {
 
 // Función para actualizar subtotal, IVA y total
 async function updateCartTotals(cart) {
-    let subtotal = 0;
+    let total = 0;
 
     for (const item of cart.productos) {
-        const product = await Product.findById(item.producto);
-        subtotal += product.price * item.cantidad;
+      const product = await Product.findById(item.producto);
+      total += product.price * item.cantidad;
     }
-
+    let subtotal = total - (total * 0.16);
     cart.subtotal = subtotal;
-    cart.iva = subtotal * 0.16; // Suponiendo un IVA del 16%
-    cart.total = cart.subtotal + cart.iva;
+    cart.iva = total * 0.16;
+    cart.total= total;
 }
 
-// Funcion para generar el pdf de la factura
-async function generateInvoicePDF(cart, user) {
-    const doc = new PDFDocument();
-    const filePath = `./facturas/${cart._id}.pdf`; // Ruta donde se generará el PDF localmente
-
-    const fechaActual = new Date();
-    const fechaFormateada = fechaActual.toLocaleString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-    });
-
-    return new Promise((resolve, reject) => {
-        const stream = fs.createWriteStream(filePath);
-        doc.pipe(stream);
-
-        // Encabezado
-        doc.fontSize(18).text('Factura de Compra', { align: 'center' });
-        doc.moveDown();
-        doc.fontSize(14).text(`Nombre: ${user.nombreCompleto}`);
-        doc.text(`Email: ${user.email}`);
-        doc.text(`Fecha: ${fechaFormateada}`);
-        doc.text(`Número de Factura: ${cart._id}`);
-        doc.moveDown();
-
-        // Productos
-        doc.fontSize(16).text('Detalles de la Compra:');
-        doc.moveDown();
-
-        cart.productos.forEach((item) => {
-            doc.fontSize(12).text(
-                `${item.producto.name}`
-            );
-            doc.fontSize(12).text(
-                `Cantidad: ${item.cantidad}`
-            );
-            doc.fontSize(12).text(
-                `Precio: $${item.producto.price.toFixed(2)}`
-            );
-            doc.fontSize(21).text(
-                `________________________________________`
-            );
-        });
-
-        doc.moveDown();
-        doc.fontSize(12).text(`Subtotal: $${cart.subtotal.toFixed(2)}`);
-        doc.text(`IVA: $${cart.iva.toFixed(2)}`);
-        doc.text(`Total: $${cart.total.toFixed(2)}`);
-
-        // Finalizar
-        doc.end();
-        stream.on('finish', () => resolve(filePath));
-        stream.on('error', (err) => reject(err));
-    });
-}
-
-// Función para eliminar el PDF generado
+// Función para eliminar el archivo generado
 async function deleteInvoicePDF(filePath) {
     return new Promise((resolve, reject) => {
         fs.unlink(filePath, (err) => {

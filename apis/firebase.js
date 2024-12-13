@@ -5,7 +5,6 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Configuración de Firebase
 const firebaseConfig = {
   apiKey: `${process.env.FIREBASE_API_KEY}`,
   authDomain: `${process.env.FIREBASE_AUTH_DOMAIN}`,
@@ -25,26 +24,40 @@ const storage = getStorage(app);
 // Exportar la función para que pueda ser usada en otros archivos
 const uploadFile = async (filePath) => {
   try {
-    // Leer el archivo local (por ejemplo, 'pdfs/documento.pdf')
-    const file = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath); // Obtener solo el nombre del archivo, por ejemplo 'documento.pdf'
+    console.log('Uploading file:', filePath);
 
-    // Crear la referencia al archivo en Firebase Storage (en la carpeta 'pdfs' en Firebase)
+    // Usar ruta absoluta
+    const fullPath = path.resolve(filePath);
+    console.log('Full resolved path:', fullPath);
+
+    // Verificar existencia del archivo con manejo de errores detallado
+    if (!fs.existsSync(fullPath)) {
+      console.error('Archivo no encontrado en:', fullPath);
+      console.error('Contenido del directorio:', fs.readdirSync(path.dirname(fullPath)));
+      throw new Error(`File not found: ${fullPath}`);
+    }
+
+    // Leer el archivo completo
+    const fileBuffer = fs.readFileSync(fullPath);
+
+    const fileName = path.basename(filePath);
     const storageRef = ref(storage, `facturas/${fileName}`);
 
-    // Subir el archivo a Firebase
-    await uploadBytes(storageRef, file);
-
-    // Obtener la URL pública del archivo subido
+    await uploadBytes(storageRef, fileBuffer);
     const downloadURL = await getDownloadURL(storageRef);
 
-    // Devolver la URL pública
     return downloadURL;
-
   } catch (error) {
     console.error('Error al subir el archivo:', error);
+    console.error('Detalles del error:', {
+      message: error.message,
+      code: error.code,
+      path: error.path
+    });
+    throw error;
   }
-};
+}; 
+
 
 // Exportar la función uploadFile
 module.exports = { uploadFile };
